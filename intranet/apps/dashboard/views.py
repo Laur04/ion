@@ -31,7 +31,21 @@ def gen_schedule(user, num_blocks=6, surrounding_blocks=None):
     schedule = []
 
     if surrounding_blocks is None:
-        surrounding_blocks = EighthBlock.objects.get_upcoming_blocks(num_blocks)
+        #######
+        if settings.ENABLE_HYBRID_EIGHTH:
+            now = timezone.localtime()
+            if now.hour < 17:
+                now = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            surrounding_blocks = (
+                EighthBlock.objects.filter(
+                    eighthscheduledactivity__in=EighthScheduledActivity.objects.filter(activity__name="z - Hybrid Sticky").exclude(members__in=[user])
+                )
+                .order_by("date", "block_letter")
+                .filter(date__gte=now)
+            )
+        else:
+            #######
+            surrounding_blocks = EighthBlock.objects.get_upcoming_blocks(num_blocks)
 
     if not surrounding_blocks:
         return None, False
@@ -300,6 +314,22 @@ def add_widgets_context(request, context):
         surrounding_blocks = EighthBlock.objects.get_upcoming_blocks(num_blocks)
 
     if context["is_student"]:
+        #######
+        if settings.ENABLE_HYBRID_EIGHTH:
+            if surrounding_blocks is not None:
+                now = timezone.localtime()
+                if now.hour < 17:
+                    now = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                surrounding_blocks = (
+                    EighthBlock.objects.filter(
+                        eighthscheduledactivity__in=EighthScheduledActivity.objects.filter(activity__name="z - Hybrid Sticky").exclude(
+                            members__in=[request.user]
+                        )
+                    )
+                    .order_by("date", "block_letter")
+                    .filter(date__gte=now)
+                )
+        #######
         schedule, no_signup_today = gen_schedule(user, num_blocks, surrounding_blocks)
         context.update(
             {
@@ -442,6 +472,11 @@ def dashboard_view(request, show_widgets=True, show_expired=False, ignore_dashbo
 
     if settings.TJSTAR_MAP:
         context.update(get_tjstar_mapping(request.user))
+
+    #######
+    if settings.ENABLE_HYBRID_EIGHTH:
+        context.update({"hybrid": True})
+    #######
 
     if show_widgets:
         context = add_widgets_context(request, context)
